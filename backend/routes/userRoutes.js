@@ -158,12 +158,10 @@ router.post("/division/:id/credential", authenticate, async (req, res) => {
       req.user.role === "Management" ||
       division._id.equals(req.user.divisions);
     if (!userHasAccess) {
-      return res
-        .status(403)
-        .json({
-          message:
-            "You do not have permission to add credentials to this repository.",
-        });
+      return res.status(403).json({
+        message:
+          "You do not have permission to add credentials to this repository.",
+      });
     }
 
     // Create the new credential
@@ -178,17 +176,71 @@ router.post("/division/:id/credential", authenticate, async (req, res) => {
     division.credentials.push(newCredential._id);
     await division.save();
 
-    res
-      .status(201)
-      .json({
-        message: "Credential added successfully.",
-        credential: newCredential,
-      });
+    res.status(201).json({
+      message: "Credential added successfully.",
+      credential: newCredential,
+    });
   } catch (error) {
     console.error(error);
     res
       .status(500)
       .json({ message: "Server error. Unable to add credential." });
+  }
+});
+// Endpoint to update a specific credential
+router.put("/credential/:id", authenticate, async (req, res) => {
+  const credentialId = req.params.id;
+  const { service, username, password } = req.body;
+
+  if (!service && !username && !password) {
+    return res
+      .status(400)
+      .json({
+        message:
+          "At least one field (service, username, or password) must be provided.",
+      });
+  }
+
+  try {
+    // Find the credential
+    const credential = await Credential.findById(credentialId);
+
+    if (!credential) {
+      return res.status(404).json({ message: "Credential not found." });
+    }
+
+    // Check if the user has the right to update the credential
+    const userHasAccess =
+      req.user.role === "Admin" ||
+      req.user.role === "Management" ||
+      credential.division.equals(req.user.divisions);
+    if (!userHasAccess) {
+      return res
+        .status(403)
+        .json({
+          message: "You do not have permission to update this credential.",
+        });
+    }
+
+    // Update the credential fields
+    if (service) credential.service = service;
+    if (username) credential.username = username;
+    if (password) credential.password = password;
+
+    // Save the updated credential
+    const updatedCredential = await credential.save();
+
+    res
+      .status(200)
+      .json({
+        message: "Credential updated successfully.",
+        credential: updatedCredential,
+      });
+  } catch (error) {
+    console.error(error);
+    res
+      .status(500)
+      .json({ message: "Server error. Unable to update credential." });
   }
 });
 

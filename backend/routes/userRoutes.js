@@ -135,4 +135,61 @@ router.get("/division/:id/repository", authenticate, async (req, res) => {
   }
 });
 
+// Endpoint to add a credential to a specific repository
+router.post("/division/:id/credential", authenticate, async (req, res) => {
+  const divisionId = req.params.id;
+  const { service, username, password } = req.body;
+
+  if (!service || !username || !password) {
+    return res.status(400).json({ message: "All fields are required." });
+  }
+
+  try {
+    // Find the division
+    const division = await Division.findById(divisionId);
+
+    if (!division) {
+      return res.status(404).json({ message: "Division not found." });
+    }
+
+    // Check if the user has the right to add credentials
+    const userHasAccess =
+      req.user.role === "Admin" ||
+      req.user.role === "Management" ||
+      division._id.equals(req.user.divisions);
+    if (!userHasAccess) {
+      return res
+        .status(403)
+        .json({
+          message:
+            "You do not have permission to add credentials to this repository.",
+        });
+    }
+
+    // Create the new credential
+    const newCredential = await Credential.create({
+      service,
+      username,
+      password,
+      division: division._id,
+    });
+
+    // Add the credential to the division's credentials array
+    division.credentials.push(newCredential._id);
+    await division.save();
+
+    res
+      .status(201)
+      .json({
+        message: "Credential added successfully.",
+        credential: newCredential,
+      });
+  } catch (error) {
+    console.error(error);
+    res
+      .status(500)
+      .json({ message: "Server error. Unable to add credential." });
+  }
+});
+
 module.exports = router;

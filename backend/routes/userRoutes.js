@@ -2,8 +2,28 @@ const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
+const Division = require("../models/Division");
+const Credential = require("../models/Credential");
 
 const router = express.Router();
+
+// Middleware to verify JWT and extract user information
+const authenticate = (req, res, next) => {
+  const token = req.headers.authorization?.split(" ")[1]; // Extract token from "Bearer <token>"
+  if (!token) {
+    return res
+      .status(401)
+      .json({ message: "Access denied. No token provided." });
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded; // Attach user info (id and role) to the request object
+    next();
+  } catch (err) {
+    res.status(401).json({ message: "Invalid or expired token." });
+  }
+};
 
 // Registration Endpoint
 router.post("/register", async (req, res) => {
@@ -76,6 +96,42 @@ router.post("/login", async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Endpoint to view a division's credential repository
+router.get("/division/:id/repository", authenticate, async (req, res) => {
+  const divisionId = req.params.id;
+
+  try {
+    // Find the division
+    const division = await Division.findById(divisionId).populate(
+      "credentials"
+    );
+
+    if (!division) {
+      return res.status(404).json({ message: "Division not found." });
+    }
+
+    // Check if the user has access rights
+    const userHasAccess =
+      req.user.role === "Admin" ||
+      req.user.role === "Management" ||
+      division._id.equals(req.user.divisions);
+
+    if (!userHasAccess) {
+      return res
+        .status(403)
+        .json({ message: "You do not have access to this repository." });
+    }
+
+    // Return the credentials
+    res.status(200).json({ credentials: division.credentials });
+  } catch (error) {
+    console.error(error);
+    res
+      .status(500)
+      .json({ message: "Server error. Unable to fetch credentials." });
   }
 });
 
